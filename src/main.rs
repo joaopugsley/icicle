@@ -1,22 +1,26 @@
 use notify::*;
+use chrono::Utc;
 use std::{path::Path, time::Duration, ffi::OsStr, fs::{File, self}, io::Read};
 
-fn generate_jsfl_template(filename: String, content: String) -> String {
+fn generate_jsfl_template(file_path: String, content: String) -> String {
     let mut new_content = String::new();
     for line in content.lines() {
         new_content.push_str(&format!("{}\\n", line));
     }
-    let template = format!(
-        "fl.outputPanel.clear();\nfl.outputPanel.trace('[FLAWATCH] Refreshing...');\nvar file_name = '{}';\nvar file_content = '{}';\nvar doc=fl.getDocumentDOM();\nvar tl=doc.getTimeline();\ntl.layers[0].frames[0].actionScript=file_content;\nfl.openDocument('file:///' + file_name);\nfl.saveDocument(fl.getDocumentDOM(), 'file:///' + file_name);\nvar now = new Date();\nfl.outputPanel.clear();\nfl.outputPanel.trace('[FLAWATCH] Refreshed! ' + now);", 
-        filename, new_content
+    let dt = Utc::now();
+    let timestamp: i64 = dt.timestamp();
+    let template = format!("//{}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{}';\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var file_content = '{}';\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    tl.layers[0].frames[0].actionScript = file_content;\n    fl.saveDocument(fl.getDocumentDOM());\n    var now = new Date();\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n}}",
+        timestamp, file_path, new_content
     );
     template
 }
 
+
 fn main() {
     let (tx, rx) = std::sync::mpsc::channel();
+
     let mut watcher: Box<dyn Watcher> = if RecommendedWatcher::kind() == WatcherKind::PollWatcher {
-        let config = Config::default().with_poll_interval(Duration::from_secs(1));
+        let config = Config::default().with_poll_interval(Duration::from_secs(2));
         Box::new(PollWatcher::new(tx, config).unwrap())
     } else {
         Box::new(RecommendedWatcher::new(tx, Config::default()).unwrap())
@@ -28,7 +32,7 @@ fn main() {
 
     for event in rx {
         match event {
-            Ok(e) => {
+            Ok(e) if matches!(e.kind, EventKind::Modify(_)) => {
                 for path in &e.paths {
                     if let Some("as") = path.extension().and_then(OsStr::to_str) {
                         let fla_path = path.with_extension("fla");
@@ -38,8 +42,11 @@ fn main() {
                                 if file.read_to_string(&mut content).is_ok() {
                                     let original_file_name = fla_path.file_stem().unwrap().to_string_lossy().to_string();
                                     let new_file_name = format!("{}_update.jsfl", original_file_name);
-                                    if let Err(err) = fs::write(fla_path.parent().unwrap().join(new_file_name), generate_jsfl_template(original_file_name, content)) {
-                                        eprintln!("Error {:?}", err);
+                                    match fs::write(fla_path.parent().unwrap().join(new_file_name), generate_jsfl_template(original_file_name, content)) {
+                                        Ok(()) => {
+                                            println!("generated :)")
+                                        }
+                                        Err(er) => println!("Error while creating jsfl {:?}", er)
                                     }
                                 }
                             }
@@ -47,7 +54,8 @@ fn main() {
                     }
                 };
             }
-            Err(e) => println!("watch error {:?}", e)
+            Err(e) => println!("Watch error {:?}", e),
+            _ => {} // ignoring other events
         }
     }
 }

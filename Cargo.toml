@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.31"
 notify = "6.1.1"
+rfd = "0.12.1"

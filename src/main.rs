@@ -92,10 +92,10 @@ fn clear() {
 
 fn get_config_path() -> Option<String> {
     #[cfg(target_os = "windows")]
-    let (config_dir, config_file) = (env::var("APPDATA"), "Icicle\\config.txt");
+    let (config_dir, config_file) = (env::var("APPDATA"), "Icicle\\config.cfg");
 
     #[cfg(not(target_os = "windows"))]
-    let (config_dir, config_file) = (env::var("HOME"), ".icicle/config.txt");
+    let (config_dir, config_file) = (env::var("HOME"), ".icicle/config.cfg");
 
     match config_dir {
         Ok(dir) => {

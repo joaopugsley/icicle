@@ -3,6 +3,14 @@ use chrono::Utc;
 use std::{path::{Path, PathBuf}, time::Duration, ffi::OsStr, fs::{File, self, OpenOptions}, io::{Read, self, Write}, process::Command, env};
 use rfd::FileDialog;
 
+fn fix_wine_path(path: String) -> String {
+    let disk = load_config("custom_disk").unwrap_or("C".to_string());
+    let disk_path = format!("{}:/users/", disk);
+    return path
+        .replace("/home/", &disk_path)
+        .replace("Documentos", "Documents");
+}
+
 fn generate_jsfl_template(file_path: String, content: String) -> String {
     let mut new_content = String::new();
     for line in content.lines() {
@@ -50,16 +58,19 @@ fn start_watcher(flash_exe_path: String) {
                                     let new_file_name = format!("{}_update.jsfl", original_file_name);
                                     let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
                                     let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
-
+                                    
                                     #[cfg(target_os = "windows")]
-                                    let command = &flash_exe_path;
-
+                                    let jsfl_template = generate_jsfl_template(beauty_file_path, content);
                                     #[cfg(not(target_os = "windows"))]
-                                    let command = &format!("wine {}", &flash_exe_path);
+                                    let jsfl_template = generate_jsfl_template(fix_wine_path(beauty_file_path), content);
 
-                                    match fs::write(fla_path.parent().unwrap().join(&new_file_name), generate_jsfl_template(beauty_file_path, content)) {
+                                    match fs::write(fla_path.parent().unwrap().join(&new_file_name), &jsfl_template) {
                                         Ok(()) => {
-                                            let result = Command::new(command).arg("-RunScript").arg(beauty_jsfl_path).output();
+                                            #[cfg(target_os = "windows")]
+                                            let result = Command::new(&flash_exe_path).arg("-RunScript").arg(beauty_jsfl_path).output();
+                                            #[cfg(not(target_os = "windows"))]
+                                            let result = Command::new("wine").arg(&flash_exe_path).arg("-RunScript").arg(fix_wine_path(beauty_jsfl_path)).output();
+
                                             match result {
                                                 Ok(_) => {
                                                     clear();

@@ -18,8 +18,9 @@ fn generate_jsfl_template(file_path: String, content: String) -> String {
     }
     let dt = Utc::now();
     let timestamp: i64 = dt.timestamp();
-    let template = format!("//{}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{}';\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var file_content = '{}';\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    tl.layers[0].frames[0].actionScript = file_content;\n    fl.saveDocument(fl.getDocumentDOM());\n    var now = new Date();\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n}}",
-        timestamp, file_path, new_content
+    let timeline_layer = load_config("custom_script_layer").unwrap_or("1".to_string());
+    let template = format!("//{}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{}';\nvar file_content = '{}';\nvar action_layer = {};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n    }}\n}}",
+        timestamp, file_path, new_content, timeline_layer
     );
     template
 }

@@ -158,15 +158,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flawatch"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "notify",
- "rfd",
-]
-
-[[package]]
 name = "fsevent-sys"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -290,6 +281,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "icicle"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "notify",
+ "rfd",
 ]
 
 [[package]]

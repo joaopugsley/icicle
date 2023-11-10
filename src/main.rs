@@ -50,9 +50,16 @@ fn start_watcher(flash_exe_path: String) {
                                     let new_file_name = format!("{}_update.jsfl", original_file_name);
                                     let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
                                     let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
+
+                                    #[cfg(target_os = "windows")]
+                                    let command = &flash_exe_path;
+
+                                    #[cfg(not(target_os = "windows"))]
+                                    let command = &format!("wine {}", &flash_exe_path);
+
                                     match fs::write(fla_path.parent().unwrap().join(&new_file_name), generate_jsfl_template(beauty_file_path, content)) {
                                         Ok(()) => {
-                                            let result = Command::new(&flash_exe_path).arg("-RunScript").arg(beauty_jsfl_path).output();
+                                            let result = Command::new(command).arg("-RunScript").arg(beauty_jsfl_path).output();
                                             match result {
                                                 Ok(_) => {
                                                     clear();
@@ -136,7 +143,6 @@ fn main() {
                 },
                 None => println!("No file selected."),
             }
-
         }
     } else {
         println!("Unable to find the config directory");

@@ -1,6 +1,6 @@
 use notify::*;
 use chrono::Utc;
-use std::{path::Path, time::Duration, ffi::OsStr, fs::{File, self}, io::Read, process::Command, env};
+use std::{path::{Path, PathBuf}, time::Duration, ffi::OsStr, fs::{File, self, OpenOptions}, io::{Read, self, Write}, process::Command, env};
 use rfd::FileDialog;
 
 fn generate_jsfl_template(file_path: String, content: String) -> String {
@@ -90,7 +90,7 @@ fn clear() {
     }
 }
 
-fn get_config_path() -> Option<String> {
+fn get_os_config_path() -> Option<String> {
     #[cfg(target_os = "windows")]
     let (config_dir, config_file) = (env::var("APPDATA"), "Icicle\\config.cfg");
 
@@ -106,45 +106,69 @@ fn get_config_path() -> Option<String> {
     }
 }
 
-fn main() {
-    if let Some(config_path) = get_config_path() {
-        if Path::new(&config_path).exists() {
-            match fs::read_to_string(&config_path) {
-                Ok(content) => {
-                    // TODO: replace this with a decent config manager
-                    let flash_path = content.to_string().replace("flash_path=", "");
-                    start_watcher(flash_path);
-                }
-                Err(err) => println!("Error reading config file: {:?}", err),
-            }
-        } else {
-            clear();
-            println!("[ICICLE] Error: Flash executable could not be found. Please select it using the file explorer. You will just need to do this once.");
-            let file: Option<std::path::PathBuf> = FileDialog::new()
-                .set_title("Select the FLASH executable")
-                .add_filter("Executable", &["exe"])
-                .pick_file();
-            match file {
-                Some(path) => {
-                    let file_path = path.to_string_lossy().replace("\\", "/");
-                    let beauty_config_path = config_path.as_str().replace("\\", "/");
-                    if let Some(parent_dir) = Path::new(&beauty_config_path).parent() {
-                        if let Err(err) = fs::create_dir_all(parent_dir) {
-                            println!("Error creating directory: {:?}", err);
-                        }
-                    }
-                    match fs::write(&beauty_config_path, format!("flash_path={}", file_path)) {
-                        Ok(()) => {
-                            start_watcher(file_path);
-                        }
-                        Err(err) => println!("Error while creating ICICLE config file {:?}", err)
-                    }
+fn save_config(key: &str, value: &str) -> io::Result<()> {
+    if let Some(config_path) = get_os_config_path() {
+        if let Some(parent_dir) = PathBuf::from(&config_path).parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
+        let line = format!("{}={}\n", key, value);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(&config_path)?;
+        file.write_all(line.as_bytes())?;
+    } else {
+        println!("Error: Could not get config path.")
+    }
+    Ok(())
+}
 
-                },
-                None => println!("No file selected."),
+fn load_config(key: &str) -> Option<String> {
+    if let Ok(mut file) = fs::File::open("icicle.cfg") {
+        let mut content = String::new();
+        if file.read_to_string(&mut content).is_ok() {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.splitn(2, '=').collect();
+                if parts.len() == 2 && parts[0] == key {
+                    return Some(parts[1].to_string());
+                }
             }
         }
+    }
+    
+    if let Some(config_path) = get_os_config_path() {
+        if let Ok(file_content) = fs::read_to_string(&config_path) {
+            for line in file_content.lines() {
+                let parts: Vec<&str> = line.splitn(2, '=').collect();
+                if parts.len() == 2 && parts[0] == key {
+                    return Some(parts[1].to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn main() {
+    if let Some(flash_path) = load_config("flash_path") {
+        start_watcher(flash_path);
     } else {
-        println!("Unable to find the config directory");
+        clear();
+        println!("[ICICLE] Error: Flash executable could not be found. Please select it using the file explorer. You will just need to do this once.");
+        let file: Option<std::path::PathBuf> = FileDialog::new()
+            .set_title("Select the FLASH executable")
+            .add_filter("Executable", &["exe"])
+            .pick_file();
+
+        match file {
+            Some(path) => {
+                let file_path = path.to_string_lossy().replace("\\", "/");
+                let _ = save_config("flash_path", &file_path);
+                start_watcher(file_path);
+            }
+            None => println!("No file selected."),
+        }
     }
 }

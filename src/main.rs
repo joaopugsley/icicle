@@ -1,5 +1,6 @@
 use notify::*;
 use chrono::Utc;
+use sha2::{Sha256, Digest};
 use std::{path::{Path, PathBuf}, time::Duration, ffi::OsStr, fs::{File, self, OpenOptions}, io::{Read, self, Write}, process::Command, env};
 use rfd::FileDialog;
 
@@ -9,6 +10,13 @@ fn fix_wine_path(path: String) -> String {
     return path
         .replace("/home/", &disk_path)
         .replace("Documentos", "Documents");
+}
+
+fn generate_content_hash(content: String) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content);
+    let result = hasher.finalize();
+    format!("{:x}", result)
 }
 
 fn generate_jsfl_template(file_path: String, content: String) -> String {
@@ -28,6 +36,8 @@ fn start_watcher(flash_exe_path: String) {
     clear();
     println!("[ICICLE] Started! Current Flash executable path: {:?}", flash_exe_path);
     println!("[ICICLE] Waiting for file changes...");
+
+    let mut last_generated_hash = String::new();
 
     let (tx, rx) = std::sync::mpsc::channel();
 
@@ -49,37 +59,46 @@ fn start_watcher(flash_exe_path: String) {
                     if let Some("as") = path.extension().and_then(OsStr::to_str) {
                         let fla_path = path.with_extension("fla");
                         if fla_path.exists() && fla_path.file_stem() == path.file_stem() {
-                            clear();
-                            println!("[ICICLE] File changed, refreshing...");
                             if let Ok(mut file) = File::open(path) {
                                 let mut content = String::new();
                                 if file.read_to_string(&mut content).is_ok() {
-                                    let original_file_name = fla_path.file_stem().unwrap().to_string_lossy().to_string();
-                                    let new_file_name = format!("{original_file_name}_update.jsfl");
-                                    let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
-                                    let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
-                                    
-                                    #[cfg(target_os = "windows")]
-                                    let jsfl_template = generate_jsfl_template(beauty_file_path, content);
-                                    #[cfg(not(target_os = "windows"))]
-                                    let jsfl_template = generate_jsfl_template(fix_wine_path(beauty_file_path), content);
+                                    let new_content_hash = generate_content_hash(content.clone());
+                                    if last_generated_hash != new_content_hash {
+                                        last_generated_hash = new_content_hash.clone();
 
-                                    match fs::write(fla_path.parent().unwrap().join(&new_file_name), &jsfl_template) {
-                                        Ok(()) => {
-                                            #[cfg(target_os = "windows")]
-                                            let result = Command::new(&flash_exe_path).arg("-RunScript").arg(beauty_jsfl_path).output();
-                                            #[cfg(not(target_os = "windows"))]
-                                            let result = Command::new("wine").arg(&flash_exe_path).arg("-RunScript").arg(fix_wine_path(beauty_jsfl_path)).output();
+                                        clear();
+                                        println!("[ICICLE] File changed, refreshing...");
 
-                                            match result {
-                                                Ok(_) => {
-                                                    clear();
-                                                    println!("[ICICLE] Waiting for file changes...");
+                                        let original_file_name = fla_path.file_stem().unwrap().to_string_lossy().to_string();
+                                        let new_file_name = format!("{original_file_name}_update.jsfl");
+                                        let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
+                                        let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
+                                        
+                                        #[cfg(target_os = "windows")]
+                                        let jsfl_template = generate_jsfl_template(beauty_file_path, content);
+
+                                        #[cfg(not(target_os = "windows"))]
+                                        let jsfl_template = generate_jsfl_template(fix_wine_path(beauty_file_path), content);
+
+                                        match fs::write(fla_path.parent().unwrap().join(&new_file_name), &jsfl_template) {
+                                            Ok(()) => {
+
+                                                #[cfg(target_os = "windows")]
+                                                let result = Command::new(&flash_exe_path).arg("-RunScript").arg(beauty_jsfl_path).output();
+
+                                                #[cfg(not(target_os = "windows"))]
+                                                let result = Command::new("wine").arg(&flash_exe_path).arg("-RunScript").arg(fix_wine_path(beauty_jsfl_path)).output();
+
+                                                match result {
+                                                    Ok(_) => {
+                                                        clear();
+                                                        println!("[ICICLE] Waiting for file changes...");
+                                                    }
+                                                    Err(erro) => println!("Error: {:?}", erro)
                                                 }
-                                                Err(erro) => println!("Error: {:?}", erro)
                                             }
+                                            Err(er) => println!("Error while creating jsfl {:?}", er)
                                         }
-                                        Err(er) => println!("Error while creating jsfl {:?}", er)
                                     }
                                 }
                             }

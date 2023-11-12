@@ -5,7 +5,7 @@ use rfd::FileDialog;
 
 fn fix_wine_path(path: String) -> String {
     let disk = load_config("custom_disk").unwrap_or("C".to_string());
-    let disk_path = format!("{}:/users/", disk);
+    let disk_path = format!("{disk}:/users/");
     return path
         .replace("/home/", &disk_path)
         .replace("Documentos", "Documents");
@@ -14,15 +14,13 @@ fn fix_wine_path(path: String) -> String {
 fn generate_jsfl_template(file_path: String, content: String) -> String {
     let mut new_content = String::new();
     for line in content.lines() {
-        new_content.push_str(&format!("{}\\n", line));
+        new_content.push_str(&format!("{line}\\n"));
     }
     let dt = Utc::now();
     let timestamp: i64 = dt.timestamp();
     let timeline_layer = load_config("custom_script_layer").unwrap_or("1".to_string());
     let auto_publish = load_config("auto_publish").unwrap_or_default() == "true";
-    let template = format!("//{}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{}';\nvar file_content = '{}';\nvar action_layer = {};\nvar auto_publish = {};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n        if(auto_publish == true) {{\n		    doc.publish();\n        }}\n    }}\n}}",
-        timestamp, file_path, new_content, timeline_layer, auto_publish
-    );
+    let template = format!("//{timestamp}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{file_path}';\nvar file_content = '{new_content}';\nvar action_layer = {timeline_layer};\nvar auto_publish = {auto_publish};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n        if(auto_publish == true) {{\n		    doc.publish();\n        }}\n    }}\n}}");
     template
 }
 
@@ -57,7 +55,7 @@ fn start_watcher(flash_exe_path: String) {
                                 let mut content = String::new();
                                 if file.read_to_string(&mut content).is_ok() {
                                     let original_file_name = fla_path.file_stem().unwrap().to_string_lossy().to_string();
-                                    let new_file_name = format!("{}_update.jsfl", original_file_name);
+                                    let new_file_name = format!("{original_file_name}_update.jsfl");
                                     let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
                                     let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
                                     
@@ -112,7 +110,7 @@ fn get_os_config_path() -> Option<String> {
 
     match config_dir {
         Ok(dir) => {
-            let config_path = format!("{}/{}", dir, config_file);
+            let config_path = format!("{dir}/{config_file}");
             Some(config_path)
         }
         Err(_) => None,
@@ -124,7 +122,7 @@ fn save_config(key: &str, value: &str) -> io::Result<()> {
         if let Some(parent_dir) = PathBuf::from(&config_path).parent() {
             fs::create_dir_all(parent_dir)?;
         }
-        let line = format!("{}={}\n", key, value);
+        let line = format!("{key}={value}\n");
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)

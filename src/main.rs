@@ -22,7 +22,8 @@ fn generate_content_hash(content: String) -> String {
 fn generate_jsfl_template(file_name: String, content: String) -> String {
     let mut new_content = String::new();
     for line in content.lines() {
-        new_content.push_str(&format!("{line}\\n"));
+        let fixed_line = line.replace(r#"\"#, r#"\\"#).to_string();
+        new_content.push_str(&format!("{fixed_line}\\n"));
     }
     let dt = Utc::now();
     let timestamp: i64 = dt.timestamp();

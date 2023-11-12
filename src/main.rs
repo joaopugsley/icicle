@@ -19,7 +19,7 @@ fn generate_content_hash(content: String) -> String {
     format!("{:x}", result)
 }
 
-fn generate_jsfl_template(file_path: String, content: String) -> String {
+fn generate_jsfl_template(file_name: String, content: String) -> String {
     let mut new_content = String::new();
     for line in content.lines() {
         new_content.push_str(&format!("{line}\\n"));
@@ -28,7 +28,8 @@ fn generate_jsfl_template(file_path: String, content: String) -> String {
     let timestamp: i64 = dt.timestamp();
     let timeline_layer = load_config("custom_script_layer").unwrap_or("1".to_string());
     let auto_publish = load_config("auto_publish").unwrap_or_default() == "true";
-    let template = format!("//{timestamp}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar file_path = 'file:///{file_path}';\nvar file_content = '{new_content}';\nvar action_layer = {timeline_layer};\nvar auto_publish = {auto_publish};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n        if(auto_publish == true) {{\n		    doc.publish();\n        }}\n    }}\n}}");
+    let template = format!("//{timestamp}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar loc = fl.scriptURI;\nvar scriptFolder = loc.substring(0, loc.lastIndexOf('/') + 1);\nvar file_path = scriptFolder + '{file_name}.fla';\nvar file_content = '{new_content}';\nvar action_layer = {timeline_layer};\nvar auto_publish = {auto_publish};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n        if(auto_publish == true) {{\n		    doc.publish();\n        }}\n    }}\n}}");
+    
     template
 }
 
@@ -71,15 +72,9 @@ fn start_watcher(flash_exe_path: String) {
 
                                         let original_file_name = fla_path.file_stem().unwrap().to_string_lossy().to_string();
                                         let new_file_name = format!("{original_file_name}_update.jsfl");
-                                        let beauty_file_path = fla_path.as_os_str().to_str().unwrap().replace("\\", "/");
+                                        let jsfl_template = generate_jsfl_template(original_file_name, content);
                                         let beauty_jsfl_path = fla_path.with_file_name(new_file_name.clone()).to_string_lossy().to_string().replace("\\", "/");
                                         
-                                        #[cfg(target_os = "windows")]
-                                        let jsfl_template = generate_jsfl_template(beauty_file_path, content);
-
-                                        #[cfg(not(target_os = "windows"))]
-                                        let jsfl_template = generate_jsfl_template(fix_wine_path(beauty_file_path), content);
-
                                         match fs::write(fla_path.parent().unwrap().join(&new_file_name), &jsfl_template) {
                                             Ok(()) => {
 

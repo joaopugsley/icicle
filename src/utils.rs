@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{process::Command, path::{PathBuf, Path}, fs::File, io::Read};
 use chrono::Utc;
 use sha2::{Sha256, Digest};
 use crate::config::load_config;
@@ -39,4 +39,18 @@ pub fn generate_jsfl_template(file_name: String, content: String) -> String {
     let template = format!("//{timestamp}\nfl.outputPanel.clear();\nfl.outputPanel.trace('[ICICLE] Refreshing...');\nvar loc = fl.scriptURI;\nvar scriptFolder = loc.substring(0, loc.lastIndexOf('/') + 1);\nvar file_path = scriptFolder + '{file_name}.fla';\nvar file_content = '{new_content}';\nvar action_layer = {timeline_layer};\nvar auto_publish = {auto_publish};\nif (!fl.fileExists(file_path)) {{\n    fl.outputPanel.clear();\n    fl.outputPanel.trace('[ICICLE] ERROR: ' + file_path + ' does not exist.');\n}} else {{\n    fl.openDocument(file_path);\n    var doc = fl.getDocumentDOM();\n    var tl = doc.getTimeline();\n    if(!tl.layers[action_layer]) {{\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] ActionScript layer default is: 1, if you want to use another layer modify the Icicle config or create a new one.');\n    }} else {{\n        tl.layers[action_layer].frames[0].actionScript = file_content;\n        fl.saveDocument(fl.getDocumentDOM());\n        var now = new Date();\n        fl.outputPanel.clear();\n        fl.outputPanel.trace('[ICICLE] Refreshed! ' + now);\n        if(auto_publish == true) {{\n		    doc.publish();\n        }}\n    }}\n}}");
     
     template
+}
+
+pub fn read_as_file_and_content(path: &Path) -> Option<(PathBuf, String)> {
+    if let Ok(mut file) = File::open(path) {
+        let mut content = String::new();
+        if file.read_to_string(&mut content).is_ok() {
+            let fla_path = path.with_extension("fla");
+            Some((fla_path, content))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
